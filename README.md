@@ -2,7 +2,7 @@
 
 # introduction
 
-转换其他鸣潮工具的抽卡记录为[WutheringWavesUID](https://github.com/tyql688/WutheringWavesUID)的json抽卡记录。
+转换其他鸣潮工具的抽卡记录为[WutheringWavesUID](https://github.com/MoonShadow1976/WutheringWavesUID)的json抽卡记录。
 
 支持工具:
 - [WutheringWavesTool](https://github.com/leck995/WutheringWavesTool)的xlsx表格
