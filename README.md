@@ -20,5 +20,7 @@
 pip install -r requirements.txt
 
 # 运行程序
-python src/main.py
+python main.py
+
+#注: 放置需要转换的文件到data文件夹
 ```
