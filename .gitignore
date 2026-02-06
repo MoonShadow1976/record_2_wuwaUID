@@ -1,2 +1,6 @@
 .venv/
+.ruff_cache/
+.vscode/
 __pycache__/
+data/
+export/

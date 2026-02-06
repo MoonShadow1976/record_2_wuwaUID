@@ -1,0 +1,41 @@
+line-length = 130
+target-version = "py310"
+exclude = [
+    ".git",
+    ".gitignore",
+    ".mypy_cache",
+    ".ruff_cache",
+    ".venv",
+    ".vscode",
+    "__pycache__",
+    "__pypackages__",
+]
+
+[format]
+quote-style = "double"
+skip-magic-trailing-comma = false
+
+[lint]
+select = [
+    "E",  # pycodestyle错误
+    "W",  # pycodestyle警告
+    "F",  # pyflakes
+    "I",  # isort
+    "B",  # 常见bug检测
+    "C4", # 理解力检查
+    "UP", # pyupgrade规则
+]
+ignore = []
+
+[lint.isort]
+known-first-party = []
+known-third-party = []
+extra-standard-library = ["typing_extensions"]
+force-sort-within-sections = true
+order-by-type = true
+
+[lint.pydocstyle]
+convention = "google"
+
+[lint.mccabe]
+max-complexity = 15
