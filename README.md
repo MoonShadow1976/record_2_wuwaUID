@@ -2,7 +2,7 @@
 
 # introduction
 
-转换其他鸣潮工具的抽卡记录为[WutheringWavesUID](https://github.com/tyql688/WutheringWavesUID)的json抽卡记录。
+转换其他鸣潮工具的抽卡记录为[WutheringWavesUID](https://github.com/MoonShadow1976/WutheringWavesUID)的json抽卡记录。
 
 支持工具:
 - [WutheringWavesTool](https://github.com/leck995/WutheringWavesTool)的xlsx表格
@@ -20,5 +20,7 @@
 pip install -r requirements.txt
 
 # 运行程序
-python src/main.py
+python main.py
+
+#注: 放置需要转换的文件到data文件夹
 ```
