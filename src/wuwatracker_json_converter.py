@@ -20,8 +20,8 @@ class InputRecord(TypedDict):
     resourceType: str
     count: int
     time: str
-    isSorted: bool | None
-    group: int | None
+    isSorted: bool
+    group: int
 
 
 class InputJsonData(TypedDict):
@@ -162,7 +162,7 @@ class JsonConverter:
     def _load_weapon_mapping(self) -> None:
         """从API加载武器名称映射"""
         try:
-            url = "https://api-v2.encore.moe/zh-Hans/weapon"
+            url = "https://api-v2.encore.moe/api/zh-Hans/weapon"
             response = requests.get(url, timeout=Config.API_TIMEOUT)
             response.raise_for_status()
 
@@ -188,11 +188,12 @@ class JsonConverter:
     def _load_character_mapping(self) -> None:
         """从API加载角色名称映射"""
         try:
-            url = "https://api-v2.encore.moe/zh-Hans/character"
+            url = "https://api-v2.encore.moe/api/zh-Hans/character"
             response = requests.get(url, timeout=Config.API_TIMEOUT)
             response.raise_for_status()
 
-            characters = response.json()  # API返回的是数组
+            data = response.json()
+            characters = data.get("roleList", [])
 
             character_count = 0
             for character in characters:
@@ -284,28 +285,19 @@ class JsonConverter:
 
         Args:
             resource_id: 资源ID
-            resource_type: 资源类型
             original_name: 原始名称
 
         Returns:
             转换后的中文名称
         """
         # 根据资源类型选择不同的映射表
-        if resource_type == "Weapon":
-            chinese_name = self.resource_mapper.weapon_map.get(resource_id)
-        elif resource_type == "Character":
-            chinese_name = self.resource_mapper.character_map.get(resource_id)
-        else:
-            chinese_name = None
-
-        # 如果找到中文名称，返回中文名称，否则返回原始名称
-        if chinese_name:
-            return chinese_name
-        else:
-            # 如果找不到映射，尝试记录日志
-            if resource_type in ["Weapon", "Character"]:
-                print(f"警告：未找到资源ID {resource_id} ({resource_type}) 的中文名称映射")
-            return original_name
+        if resource_id in self.resource_mapper.weapon_map:
+            return self.resource_mapper.weapon_map[resource_id]
+        if resource_id in self.resource_mapper.character_map:
+            return self.resource_mapper.character_map[resource_id]
+        # 若找不到映射，打印警告并返回原始名称
+        print(f"警告：未找到资源 ID {resource_id} 的英文名，使用原始名称 '{original_name}'")
+        return original_name
 
     def _convert_time_format(self, time_str: str) -> str:
         """
@@ -403,3 +395,212 @@ class JsonConverter:
             UID字符串
         """
         return self.export_data["info"]["uid"]
+
+
+class WwuidToWuwatrackerConverter:
+    """WWUID JSON 转 Wuwatracker JSON 的转换器"""
+
+    def __init__(self, file_path: str, output_dir: str | None = None):
+        """
+        初始化转换器
+
+        Args:
+            file_path: WWUID 格式的 JSON 文件路径
+            output_dir: 输出目录，若为 None 则使用文件所在目录
+        """
+        self.file_path: str = os.path.abspath(file_path)
+        self.output_dir: str = output_dir if output_dir else os.path.dirname(self.file_path)
+        self.en_weapon_map: dict[int, str] = {}  # 武器 ID -> 英文名
+        self.en_character_map: dict[int, str] = {}  # 角色 ID -> 英文名
+        self.wwuid_data: ExportData  # 输入的 WWUID 数据
+        self.wuwatracker_data: InputJsonData | None = None  # 输出的 Wuwatracker 数据
+
+    def process(self) -> bool:
+        """
+        执行转换流程
+
+        Returns:
+            转换是否成功
+        """
+        try:
+            if not os.path.exists(self.file_path):
+                raise FileNotFoundError(f"文件 {self.file_path} 不存在")
+            with open(self.file_path, encoding="utf-8") as f:
+                self.wwuid_data = json.load(f)
+
+            if not self.wwuid_data or "info" not in self.wwuid_data or "list" not in self.wwuid_data:
+                raise KeyError("WWUID 数据缺少 info 或 list 字段")
+
+            self._load_en_resource_mappings()
+            self._convert_to_wuwatracker()
+
+            if not self.wuwatracker_data:
+                raise ValueError("转换后的 Wuwatracker 数据为空")
+
+            pulls_count = len(self.wuwatracker_data["pulls"])
+            print(f"成功处理 {len(self.wwuid_data['list'])} 条记录，展开后共 {pulls_count} 条抽卡记录")
+            return True
+
+        except Exception as e:
+            print(f"处理失败: {str(e)}")
+            return False
+
+    def _load_en_resource_mappings(self) -> None:
+        """加载英文资源映射（武器和角色）"""
+        self._load_en_weapon_mapping()
+        self._load_en_character_mapping()
+
+    def _load_en_weapon_mapping(self) -> None:
+        """从 API 加载武器英文名映射"""
+        try:
+            url = "https://api-v2.encore.moe/api/en/weapon"
+            response = requests.get(url, timeout=Config.API_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+            weapons = data.get("weapons", [])
+            count = 0
+            for weapon in weapons:
+                wid = weapon.get("Id")
+                en_name = weapon.get("Name")
+                if wid and en_name:
+                    self.en_weapon_map[wid] = en_name
+                    count += 1
+            print(f"已加载 {count} 个武器英文名")
+        except requests.exceptions.Timeout:
+            print("加载武器英文名超时，将使用原始名称")
+        except requests.exceptions.RequestException as e:
+            print(f"加载武器英文名请求失败: {e}，将使用原始名称")
+        except Exception as e:
+            print(f"加载武器英文名未知错误: {e}，将使用原始名称")
+
+    def _load_en_character_mapping(self) -> None:
+        """从 API 加载角色英文名映射"""
+        try:
+            url = "https://api-v2.encore.moe/api/en/character"
+            response = requests.get(url, timeout=Config.API_TIMEOUT)
+            response.raise_for_status()
+            data = response.json()
+            characters = data.get("roleList", [])
+            count = 0
+            for char in characters:
+                cid = char.get("Id")
+                en_name = char.get("Name")
+                if cid and en_name:
+                    self.en_character_map[cid] = en_name
+                    count += 1
+            print(f"已加载 {count} 个角色英文名")
+        except requests.exceptions.Timeout:
+            print("加载角色英文名超时，将使用原始名称")
+        except requests.exceptions.RequestException as e:
+            print(f"加载角色英文名请求失败: {e}，将使用原始名称")
+        except Exception as e:
+            print(f"加载角色英文名未知错误: {e}，将使用原始名称")
+
+    def _convert_to_wuwatracker(self) -> None:
+        """执行核心转换逻辑"""
+        pulls: list[InputRecord] = []
+        # 遍历每条记录
+        for record in self.wwuid_data["list"]:
+            card_pool_chinese = record.get("cardPoolType", "")
+            card_pool_num = Config.POOLTYPE_MAPPING.get(card_pool_chinese, card_pool_chinese)
+
+            # 根据 count 展开为多条记录
+            for _ in range(record.get("count", 1)):
+                en_name = self._get_en_name_by_id(
+                    record["resourceId"],
+                    record.get("name", ""),  # fallback 使用原始名称（可能是中文）
+                )
+
+                pull: InputRecord = {
+                    "cardPoolType": int(card_pool_num),
+                    "resourceId": record["resourceId"],
+                    "qualityLevel": record["qualityLevel"],
+                    "name": en_name,
+                    "resourceType": self._convert_resource_type(record["resourceType"]),
+                    "count": record["count"],
+                    "time": self._convert_time_to_iso(record["time"]),
+                    "isSorted": True,
+                    "group": 1,
+                }
+                pulls.append(pull)
+
+        # 设置group
+        # 倒序遍历每条记录，上一个记录时间与当前记录时间相同则group+1，不同则group为1
+        for i in range(len(pulls) - 1, -1, -1):
+            if i == len(pulls) - 1:  # 最下面一条，group = 1
+                pulls[i]["group"] = 1
+            else:
+                next_pull = pulls[i + 1]
+                if pulls[i]["time"] == next_pull["time"]:
+                    pulls[i]["group"] = next_pull["group"] + 1
+                else:
+                    pulls[i]["group"] = 1
+
+        # 构建基础结构
+        self.wuwatracker_data = {
+            "version": getattr(Config, "WUWATRACKER_VERSION", "0.0.2"),
+            "date": datetime.now().strftime("%Y-%m-%dT%H:%M:%S.000Z"),
+            "playerId": self.wwuid_data["info"]["uid"],
+            "pulls": pulls,
+        }
+
+    def _get_en_name_by_id(self, resource_id: int, fallback_name: str) -> str:
+        """根据资源 ID 获取英文名，若失败则返回 fallback_name"""
+        if resource_id in self.en_weapon_map:
+            return self.en_weapon_map[resource_id]
+        if resource_id in self.en_character_map:
+            return self.en_character_map[resource_id]
+        # 若找不到映射，打印警告并返回原始名称
+        print(f"警告：未找到资源 ID {resource_id} 的英文名，使用原始名称 '{fallback_name}'")
+        return fallback_name
+
+    def _convert_resource_type(self, resource_type: str) -> str:
+        """
+        转换资源类型
+
+        Args:
+            resource_type: 资源类型字符串
+
+        Returns:
+            转换后的资源类型
+        """
+        return Config.REVERSE_RESOURCE_TYPE_MAPPING.get(resource_type, resource_type)
+
+    def _convert_time_to_iso(self, time_str: str) -> str:
+        """
+        将 WWUID 的时间格式 (YYYY-MM-DD HH:MM:SS) 转换为 ISO 8601 带时区格式
+        假设输入时间为 UTC，直接附加 +00:00
+        """
+        try:
+            dt = datetime.strptime(time_str, Config.OUTPUT_TIME_FORMAT)
+            return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+        except Exception:
+            print(f"时间格式转换失败: {time_str}，将原样返回")
+            return time_str
+
+    def save_json(self, filename: str | None = None) -> None:
+        """
+        保存转换后的 JSON 文件
+
+        Args:
+            filename: 自定义文件名，若为 None 则自动生成
+        """
+        if not self.wuwatracker_data:
+            print("没有可保存的数据，请先调用 process()")
+            return
+
+        try:
+            if filename is None:
+                uid = self.wuwatracker_data["playerId"]
+                filename = f"{uid}_{datetime.now().strftime('%Y-%m-%d')}_wuwatracker-pulls.json"
+
+            output_path = os.path.join(self.output_dir, filename)
+            os.makedirs(os.path.dirname(output_path), exist_ok=True)
+
+            with open(output_path, "w", encoding="utf-8") as f:
+                json.dump(self.wuwatracker_data, f, ensure_ascii=False, indent=2)
+
+            print(f"成功导出到: {os.path.relpath(output_path)}")
+
+        except Exception as e:
+            print(f"保存失败: {str(e)}")

@@ -3,8 +3,10 @@ from typing import TypedDict
 
 class Config:
     APP_NAME: str = "WutheringWavesUID"
-    APP_VERSION: str = "3.1.1"
+    APP_VERSION: str = "3.1.9"
     EXPORT_VERSION: str = "v2.0"
+
+    WUWATRACKER_VERSION: str = "0.0.2"
 
     REQUIRED_COLUMNS: list[str] = ["卡池", "资源ID", "星级", "类型", "名称", "数量", "时间"]
 
@@ -36,8 +38,10 @@ class Config:
     # 资源类型映射
     RESOURCE_TYPE_MAPPING: dict[str, str] = {
         "Weapon": "武器",
-        "Character": "角色",
+        "Resonator": "角色",
     }
+
+    REVERSE_RESOURCE_TYPE_MAPPING: dict[str, str] = {v: k for k, v in RESOURCE_TYPE_MAPPING.items()}
 
 
 class ExportInfo(TypedDict):

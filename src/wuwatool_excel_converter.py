@@ -198,9 +198,9 @@ class ExcelProcessor:
                 "time": str(row["时间"]),
             }
         except ValueError as e:
-            raise ValueError(f"数据转换失败: {str(e)}，行数据: {row.to_dict()}")
+            raise ValueError(f"数据转换失败: {str(e)}，行数据: {row.to_dict()}") from e
         except TypeError as e:
-            raise TypeError(f"数据类型错误: {str(e)}，行数据: {row.to_dict()}")
+            raise TypeError(f"数据类型错误: {str(e)}，行数据: {row.to_dict()}") from e
 
     def get_export_data(self) -> ExportData:
         """

@@ -1,14 +1,14 @@
 import os
 
 from src.wuwatool_excel_converter import ExcelProcessor
-from src.wuwatracker_json_converter import JsonConverter
+from src.wuwatracker_json_converter import JsonConverter, WwuidToWuwatrackerConverter
+
+src_dir = os.path.dirname(os.path.abspath(__file__))
+data_dir = os.path.normpath(os.path.join(src_dir, ".", "data"))
+export_dir = os.path.normpath(os.path.join(src_dir, ".", "export"))
 
 
 def batch_process():
-    src_dir = os.path.dirname(os.path.abspath(__file__))
-    data_dir = os.path.normpath(os.path.join(src_dir, ".", "data"))
-    export_dir = os.path.normpath(os.path.join(src_dir, ".", "export"))
-
     if not os.path.exists(data_dir):
         os.makedirs(data_dir)
         os.makedirs(export_dir)
@@ -36,8 +36,16 @@ def batch_process():
                 print(f"文件处理中止: {filename}")
 
 
+def conver_to_wuwatracker():
+    conver_file = "export_117810180.json"
+    converter = WwuidToWuwatrackerConverter(f"{export_dir}/{conver_file}", export_dir)
+    if converter.process():
+        converter.save_json()
+
+
 if __name__ == "__main__":
     try:
         batch_process()
+        conver_to_wuwatracker()
     except Exception as e:
         print(f"程序异常终止: {str(e)}")
