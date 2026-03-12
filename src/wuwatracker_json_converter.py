@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timedelta
 import json
 import os
 import time
@@ -400,7 +400,7 @@ class JsonConverter:
 class WwuidToWuwatrackerConverter:
     """WWUID JSON 转 Wuwatracker JSON 的转换器"""
 
-    def __init__(self, file_path: str, output_dir: str | None = None):
+    def __init__(self, UTC_OFFSET: int, file_path: str, output_dir: str | None = None):
         """
         初始化转换器
 
@@ -408,6 +408,7 @@ class WwuidToWuwatrackerConverter:
             file_path: WWUID 格式的 JSON 文件路径
             output_dir: 输出目录，若为 None 则使用文件所在目录
         """
+        self.UTC_OFFSET: int = UTC_OFFSET
         self.file_path: str = os.path.abspath(file_path)
         self.output_dir: str = output_dir if output_dir else os.path.dirname(self.file_path)
         self.en_weapon_map: dict[int, str] = {}  # 武器 ID -> 英文名
@@ -569,11 +570,12 @@ class WwuidToWuwatrackerConverter:
     def _convert_time_to_iso(self, time_str: str) -> str:
         """
         将 WWUID 的时间格式 (YYYY-MM-DD HH:MM:SS) 转换为 ISO 8601 带时区格式
-        假设输入时间为 UTC，直接附加 +00:00
+        将转换时区时间为 UTC+0，直接附加 +00:00
         """
         try:
             dt = datetime.strptime(time_str, Config.OUTPUT_TIME_FORMAT)
-            return dt.strftime("%Y-%m-%dT%H:%M:%S+00:00")
+            dt_utc = dt - timedelta(hours = self.UTC_OFFSET)  # e.g. UTC+8 → UTC
+            return dt_utc.strftime("%Y-%m-%dT%H:%M:%S+00:00")
         except Exception:
             print(f"时间格式转换失败: {time_str}，将原样返回")
             return time_str

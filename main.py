@@ -13,7 +13,7 @@ def batch_process():
         os.makedirs(data_dir)
         os.makedirs(export_dir)
         print(f"已创建数据目录: {data_dir}")
-        print(f"请将需要处理的 .xlsx 文件放入 {data_dir} 文件夹中，然后重新运行程序。")
+        print(f"请将需要处理的 抽卡记录 文件放入 {data_dir} 文件夹中，然后重新运行程序。")
         return
 
     for filename in os.listdir(data_dir):
@@ -37,8 +37,9 @@ def batch_process():
 
 
 def conver_to_wuwatracker():
-    conver_file = "export_117810180.json"
-    converter = WwuidToWuwatrackerConverter(f"{export_dir}/{conver_file}", export_dir)
+    conver_file = "export_你的uid.json"
+    utc_timezone = 8  # e.g. UTC+8 将被转换为 UTC+0
+    converter = WwuidToWuwatrackerConverter(utc_timezone, f"{export_dir}/{conver_file}", export_dir)
     if converter.process():
         converter.save_json()
 
