@@ -37,8 +37,103 @@ class InputJsonData(TypedDict):
 class ResourceMapper:
     """资源映射器，用于缓存API数据"""
 
-    weapon_map: dict[int, str] = field(default_factory=dict)
-    character_map: dict[int, str] = field(default_factory=dict)
+    zh_weapon_map: dict[int, str] = field(default_factory=dict)
+    zh_character_map: dict[int, str] = field(default_factory=dict)
+    en_weapon_map: dict[int, str] = field(default_factory=dict)
+    en_character_map: dict[int, str] = field(default_factory=dict)
+
+    def __init__(self, api_timeout: float = 10.0) -> None:
+        self.api_timeout = api_timeout
+        # 初始化字典（dataclass的field会自动处理，但为了清晰可显式调用）
+        self.zh_weapon_map = {}
+        self.zh_character_map = {}
+        self.en_weapon_map = {}
+        self.en_character_map = {}
+
+    def _get_lang_code(self, lang: str) -> str:
+        """将简写语言代码转换为API路径中的语言代码"""
+        if lang == "zh":
+            return "zh-Hans"
+        elif lang == "en":
+            return "en"
+        else:
+            raise ValueError(f"不支持的语言: {lang}，仅支持 'zh' 或 'en'")
+
+    def load_weapon_mapping(self, lang: str = "zh") -> None:
+        """从API加载武器名称映射
+
+        Args:
+            lang: 语言，支持 'zh' 或 'en'
+        """
+        try:
+            lang_code = self._get_lang_code(lang)
+            url = f"https://api-v2.encore.moe/api/{lang_code}/weapon"
+            response = requests.get(url, timeout=self.api_timeout)
+            response.raise_for_status()
+
+            data = response.json()
+            weapons = data.get("weapons", [])
+
+            # 根据语言选择目标字典
+            target_map = self.zh_weapon_map if lang == "zh" else self.en_weapon_map
+
+            weapon_count = 0
+            for weapon in weapons:
+                weapon_id = weapon.get("Id")
+                weapon_name = weapon.get("Name")
+                if weapon_id and weapon_name:
+                    target_map[weapon_id] = weapon_name
+                    weapon_count += 1
+
+            print(f"已加载 {weapon_count} 个武器名称映射 ({lang})")
+
+        except requests.RequestException as e:
+            print(f"请求武器API失败 ({lang}): {str(e)}")
+            # 使用备用方案或空映射
+        except Exception as e:
+            print(f"处理武器数据失败 ({lang}): {str(e)}")
+
+    def load_character_mapping(self, lang: str = "zh") -> None:
+        """从API加载角色名称映射
+
+        Args:
+            lang: 语言，支持 'zh' 或 'en'
+        """
+        try:
+            lang_code = self._get_lang_code(lang)
+            url = f"https://api-v2.encore.moe/api/{lang_code}/character"
+            response = requests.get(url, timeout=self.api_timeout)
+            response.raise_for_status()
+
+            data = response.json()
+            characters = data.get("roleList", [])
+
+            # 根据语言选择目标字典
+            target_map = self.zh_character_map if lang == "zh" else self.en_character_map
+
+            character_count = 0
+            for character in characters:
+                character_id = character.get("Id")
+                character_name = character.get("Name")
+                if character_id and character_name:
+                    target_map[character_id] = character_name
+                    character_count += 1
+
+            print(f"已加载 {character_count} 个角色名称映射 ({lang})")
+
+        except requests.RequestException as e:
+            print(f"请求角色API失败 ({lang}): {str(e)}")
+            # 使用备用方案或空映射
+        except Exception as e:
+            print(f"处理角色数据失败 ({lang}): {str(e)}")
+
+    def load_all_mappings(self, langs: str | list[str] = "en") -> None:
+        """加载对应语言的武器和角色映射"""
+        if isinstance(langs, str):
+            langs = [langs]
+        for lang in langs:
+            self.load_weapon_mapping(lang)
+            self.load_character_mapping(lang)
 
 
 class JsonConverter:
@@ -54,7 +149,7 @@ class JsonConverter:
         """
         self.file_path: str = os.path.abspath(file_path)
         self.output_dir: str = output_dir if output_dir else os.path.dirname(self.file_path)
-        self.resource_mapper: ResourceMapper = ResourceMapper()
+        self.resource_mapper: ResourceMapper = ResourceMapper(Config.API_TIMEOUT)
         self.export_data: ExportData = self._init_export_data()
 
     def _init_export_data(self) -> ExportData:
@@ -152,64 +247,9 @@ class JsonConverter:
     def _load_resource_mappings(self) -> None:
         """加载资源映射（武器和角色）"""
         try:
-            # 加载武器映射
-            self._load_weapon_mapping()
-            # 加载角色映射
-            self._load_character_mapping()
+            self.resource_mapper.load_all_mappings(["zh", "en"])
         except Exception as e:
             print(f"加载资源映射失败: {str(e)}")
-
-    def _load_weapon_mapping(self) -> None:
-        """从API加载武器名称映射"""
-        try:
-            url = "https://api-v2.encore.moe/api/zh-Hans/weapon"
-            response = requests.get(url, timeout=Config.API_TIMEOUT)
-            response.raise_for_status()
-
-            data = response.json()
-            weapons = data.get("weapons", [])
-
-            weapon_count = 0
-            for weapon in weapons:
-                weapon_id = weapon.get("Id")
-                weapon_name = weapon.get("Name")
-                if weapon_id and weapon_name:
-                    self.resource_mapper.weapon_map[weapon_id] = weapon_name
-                    weapon_count += 1
-
-            print(f"已加载 {weapon_count} 个武器名称映射")
-
-        except requests.RequestException as e:
-            print(f"请求武器API失败: {str(e)}")
-            # 使用备用方案或空映射
-        except Exception as e:
-            print(f"处理武器数据失败: {str(e)}")
-
-    def _load_character_mapping(self) -> None:
-        """从API加载角色名称映射"""
-        try:
-            url = "https://api-v2.encore.moe/api/zh-Hans/character"
-            response = requests.get(url, timeout=Config.API_TIMEOUT)
-            response.raise_for_status()
-
-            data = response.json()
-            characters = data.get("roleList", [])
-
-            character_count = 0
-            for character in characters:
-                character_id = character.get("Id")
-                character_name = character.get("Name")
-                if character_id and character_name:
-                    self.resource_mapper.character_map[character_id] = character_name
-                    character_count += 1
-
-            print(f"已加载 {character_count} 个角色名称映射")
-
-        except requests.RequestException as e:
-            print(f"请求角色API失败: {str(e)}")
-            # 使用备用方案或空映射
-        except Exception as e:
-            print(f"处理角色数据失败: {str(e)}")
 
     def _convert_record(self, input_record: InputRecord) -> Record | None:
         """
@@ -223,23 +263,21 @@ class JsonConverter:
         """
         try:
             # 转换卡池类型
-            card_pool_type = self._convert_card_pool_type(input_record.get("cardPoolType", 0))
-
-            # 转换资源类型
-            resource_type = self._convert_resource_type(input_record.get("resourceType", ""))
+            card_pool_type = self._convert_card_pool_type(input_record.get("cardPoolType"))
 
             # 转换名称（英文转中文）
-            name = self._convert_name(
-                input_record.get("resourceId", 0), input_record.get("resourceType", ""), input_record.get("name", "")
-            )
+            name, rid = self._convert_name(input_record.get("resourceId", 0), input_record.get("name", ""))
+
+            # 转换资源类型
+            resource_type = self._convert_resource_type(input_record.get("resourceType"), rid)
 
             # 转换时间格式
             time_str = self._convert_time_format(input_record.get("time", ""))
 
             return {
                 "cardPoolType": card_pool_type,
-                "resourceId": input_record.get("resourceId", 0),
-                "qualityLevel": input_record.get("qualityLevel", 3),
+                "resourceId": rid,
+                "qualityLevel": input_record.get("qualityLevel"),
                 "resourceType": resource_type,
                 "name": name,
                 "count": input_record.get("count", 1),
@@ -250,7 +288,7 @@ class JsonConverter:
             print(f"转换记录失败: {str(e)}, 记录: {input_record}")
             return None
 
-    def _convert_card_pool_type(self, pool_type: int) -> str:
+    def _convert_card_pool_type(self, pool_type: int | str) -> str:
         """
         转换卡池类型
 
@@ -267,19 +305,29 @@ class JsonConverter:
         pool_type_str = str(pool_type)
         return reverse_mapping.get(pool_type_str, f"{pool_type}")
 
-    def _convert_resource_type(self, resource_type: str) -> str:
+    def _convert_resource_type(self, resource_type: str, resource_id: int) -> str:
         """
         转换资源类型
 
         Args:
             resource_type: 资源类型字符串
+            resource_id: 资源 ID
 
         Returns:
             转换后的资源类型
         """
-        return Config.RESOURCE_TYPE_MAPPING.get(resource_type, resource_type)
+        resource_type = Config.RESOURCE_TYPE_MAPPING.get(resource_type, resource_type)
+        if resource_type:
+            return resource_type
 
-    def _convert_name(self, resource_id: int, resource_type: str, original_name: str) -> str:
+        # 未找到映射，根据资源 ID 判断
+        if resource_id in self.resource_mapper.zh_weapon_map:
+            resource_type = "武器"
+        if resource_id in self.resource_mapper.zh_character_map:
+            resource_type = "角色"
+        return resource_type
+
+    def _convert_name(self, resource_id: int, original_name: str) -> tuple[str, int]:
         """
         转换名称（英文转中文）
 
@@ -288,16 +336,31 @@ class JsonConverter:
             original_name: 原始名称
 
         Returns:
-            转换后的中文名称
+            转换后的中文名称和补充的资源ID
         """
         # 根据资源类型选择不同的映射表
-        if resource_id in self.resource_mapper.weapon_map:
-            return self.resource_mapper.weapon_map[resource_id]
-        if resource_id in self.resource_mapper.character_map:
-            return self.resource_mapper.character_map[resource_id]
-        # 若找不到映射，打印警告并返回原始名称
-        print(f"警告：未找到资源 ID {resource_id} 的英文名，使用原始名称 '{original_name}'")
-        return original_name
+        if resource_id in self.resource_mapper.zh_weapon_map:
+            return self.resource_mapper.zh_weapon_map[resource_id], resource_id
+        if resource_id in self.resource_mapper.zh_character_map:
+            return self.resource_mapper.zh_character_map[resource_id], resource_id
+
+        # 若找不到映射, 从英文映射表中查找
+        print(f"警告：未找到资源 ID {resource_id} 原始名称 '{original_name}' 的中文名，尝试从英文映射表中查找")
+        if original_name in self.resource_mapper.en_weapon_map.values():
+            resource_id = next(
+                (k for k, v in self.resource_mapper.en_weapon_map.items() if v == original_name),
+                resource_id,
+            )
+            return self.resource_mapper.zh_weapon_map[resource_id], resource_id
+        if original_name in self.resource_mapper.en_character_map.values():
+            resource_id = next(
+                (k for k, v in self.resource_mapper.en_character_map.items() if v == original_name),
+                resource_id,
+            )
+            return self.resource_mapper.zh_character_map[resource_id], resource_id
+
+        print(f"警告：未找到资源 ID {resource_id} 的中文名，使用原始名称 '{original_name}'")
+        return original_name, resource_id
 
     def _convert_time_format(self, time_str: str) -> str:
         """
@@ -411,8 +474,7 @@ class WwuidToWuwatrackerConverter:
         self.UTC_OFFSET: int = UTC_OFFSET
         self.file_path: str = os.path.abspath(file_path)
         self.output_dir: str = output_dir if output_dir else os.path.dirname(self.file_path)
-        self.en_weapon_map: dict[int, str] = {}  # 武器 ID -> 英文名
-        self.en_character_map: dict[int, str] = {}  # 角色 ID -> 英文名
+        self.resource_mapper: ResourceMapper = ResourceMapper(Config.API_TIMEOUT)
         self.wwuid_data: ExportData  # 输入的 WWUID 数据
         self.wuwatracker_data: InputJsonData | None = None  # 输出的 Wuwatracker 数据
 
@@ -447,55 +509,11 @@ class WwuidToWuwatrackerConverter:
             return False
 
     def _load_en_resource_mappings(self) -> None:
-        """加载英文资源映射（武器和角色）"""
-        self._load_en_weapon_mapping()
-        self._load_en_character_mapping()
-
-    def _load_en_weapon_mapping(self) -> None:
-        """从 API 加载武器英文名映射"""
+        """加载资源映射（武器和角色）"""
         try:
-            url = "https://api-v2.encore.moe/api/en/weapon"
-            response = requests.get(url, timeout=Config.API_TIMEOUT)
-            response.raise_for_status()
-            data = response.json()
-            weapons = data.get("weapons", [])
-            count = 0
-            for weapon in weapons:
-                wid = weapon.get("Id")
-                en_name = weapon.get("Name")
-                if wid and en_name:
-                    self.en_weapon_map[wid] = en_name
-                    count += 1
-            print(f"已加载 {count} 个武器英文名")
-        except requests.exceptions.Timeout:
-            print("加载武器英文名超时，将使用原始名称")
-        except requests.exceptions.RequestException as e:
-            print(f"加载武器英文名请求失败: {e}，将使用原始名称")
+            self.resource_mapper.load_all_mappings()
         except Exception as e:
-            print(f"加载武器英文名未知错误: {e}，将使用原始名称")
-
-    def _load_en_character_mapping(self) -> None:
-        """从 API 加载角色英文名映射"""
-        try:
-            url = "https://api-v2.encore.moe/api/en/character"
-            response = requests.get(url, timeout=Config.API_TIMEOUT)
-            response.raise_for_status()
-            data = response.json()
-            characters = data.get("roleList", [])
-            count = 0
-            for char in characters:
-                cid = char.get("Id")
-                en_name = char.get("Name")
-                if cid and en_name:
-                    self.en_character_map[cid] = en_name
-                    count += 1
-            print(f"已加载 {count} 个角色英文名")
-        except requests.exceptions.Timeout:
-            print("加载角色英文名超时，将使用原始名称")
-        except requests.exceptions.RequestException as e:
-            print(f"加载角色英文名请求失败: {e}，将使用原始名称")
-        except Exception as e:
-            print(f"加载角色英文名未知错误: {e}，将使用原始名称")
+            print(f"加载资源映射失败: {str(e)}")
 
     def _convert_to_wuwatracker(self) -> None:
         """执行核心转换逻辑"""
@@ -547,10 +565,10 @@ class WwuidToWuwatrackerConverter:
 
     def _get_en_name_by_id(self, resource_id: int, fallback_name: str) -> str:
         """根据资源 ID 获取英文名，若失败则返回 fallback_name"""
-        if resource_id in self.en_weapon_map:
-            return self.en_weapon_map[resource_id]
-        if resource_id in self.en_character_map:
-            return self.en_character_map[resource_id]
+        if resource_id in self.resource_mapper.en_weapon_map:
+            return self.resource_mapper.en_weapon_map[resource_id]
+        if resource_id in self.resource_mapper.en_character_map:
+            return self.resource_mapper.en_character_map[resource_id]
         # 若找不到映射，打印警告并返回原始名称
         print(f"警告：未找到资源 ID {resource_id} 的英文名，使用原始名称 '{fallback_name}'")
         return fallback_name
@@ -574,7 +592,7 @@ class WwuidToWuwatrackerConverter:
         """
         try:
             dt = datetime.strptime(time_str, Config.OUTPUT_TIME_FORMAT)
-            dt_utc = dt - timedelta(hours = self.UTC_OFFSET)  # e.g. UTC+8 → UTC
+            dt_utc = dt - timedelta(hours=self.UTC_OFFSET)  # e.g. UTC+8 → UTC
             return dt_utc.strftime("%Y-%m-%dT%H:%M:%S+00:00")
         except Exception:
             print(f"时间格式转换失败: {time_str}，将原样返回")
