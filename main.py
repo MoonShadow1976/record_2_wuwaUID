@@ -29,7 +29,8 @@ def batch_process():
         if filename.endswith(".json"):
             full_path = os.path.join(data_dir, filename)
             print(f"\n正在处理JSON文件: {filename}")
-            converter = JsonConverter(full_path, export_dir)
+            utc_timezone = 8  # e.g. UTC+0 将被转换为 UTC+8
+            converter = JsonConverter(utc_timezone, full_path, export_dir)
             if converter.process():
                 converter.save_json()
             else:

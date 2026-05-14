@@ -139,7 +139,7 @@ class ResourceMapper:
 class JsonConverter:
     """JSON文件转换器，用于处理Wuwatracker的JSON数据"""
 
-    def __init__(self, file_path: str, output_dir: str | None = None):
+    def __init__(self, UTC_OFFSET: int, file_path: str, output_dir: str | None = None):
         """
         初始化JSON转换器
 
@@ -147,6 +147,7 @@ class JsonConverter:
             file_path: JSON文件路径
             output_dir: 输出目录，如果为None则使用文件所在目录
         """
+        self.UTC_OFFSET: int = UTC_OFFSET
         self.file_path: str = os.path.abspath(file_path)
         self.output_dir: str = output_dir if output_dir else os.path.dirname(self.file_path)
         self.resource_mapper: ResourceMapper = ResourceMapper(Config.API_TIMEOUT)
@@ -380,7 +381,8 @@ class JsonConverter:
             for fmt in Config.INPUT_TIME_FORMATS:
                 try:
                     dt = datetime.strptime(time_str, fmt)
-                    return dt.strftime(Config.OUTPUT_TIME_FORMAT)
+                    dt_local  = dt + timedelta(hours=self.UTC_OFFSET)  # e.g. UTC → UTC+8
+                    return dt_local .strftime(Config.OUTPUT_TIME_FORMAT)
                 except ValueError:
                     continue
 
@@ -393,7 +395,8 @@ class JsonConverter:
                 # 尝试带时区的ISO格式
                 try:
                     dt = datetime.fromisoformat(time_str)
-                    return dt.strftime(Config.OUTPUT_TIME_FORMAT)
+                    dt_local  = dt + timedelta(hours=self.UTC_OFFSET)  # e.g. UTC → UTC+8
+                    return dt_local .strftime(Config.OUTPUT_TIME_FORMAT)
                 except ValueError:
                     pass
 
